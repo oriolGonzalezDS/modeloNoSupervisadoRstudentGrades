@@ -1,0 +1,897 @@
+---
+title: 'Minería de datos: PRA1 - Selección y preparación de un juego de datos'
+author: "Autor: Oriol Gonzalez Dalmau"
+date: "Abril 2021"
+output:
+  html_document:
+    highlight: default
+    number_sections: yes
+    theme: cosmo
+    toc: yes
+    toc_depth: 2
+  word_document: default
+  pdf_document:
+    highlight: zenburn
+    toc: yes
+---
+
+# Problema analítico
+
+- Queremos descubrir cuales son las principales causas de fracaso escolar en las escuelas portuguesas, para esto vamos a estudiar mediante reglas de asociación el caso de dos escuelas portuguesas y las notas de sus alumnos en dos asignaturas, también estudiaremos la correlación de las variables para identificar cuales son las mas influyentes. Mediante el estudio de las componentes principales de nuestro set de datos detemrinaremos cuales son las variables que más variabilidad(información) nos aportan y podremos descartar variables "vacías" ayudándonos a disminuir el coste computacional.
+
+Los principlaes objetivos del problema analítico se basan en crear un estudio de mineria de datos que mediante el uso de modelos supervisados y no supervisados obtenga información y conlusiones sobre los datos. Finalmente, buscaremos crear un arbol de decisón multivariante que permita predecir la nota de los estudiantes según la situación y el entorno en los que se encuentran.
+
+paquetes PRACTICA 2
+```{r}
+# install.packages("plyr", dependencies= TRUE)
+# install.packages('arulesViz')
+# install.packages("xgboost")
+
+library(plyr)
+library(arules)
+library('arulesViz')
+# library('H2O')
+
+require(xgboost)
+```
+
+# Juego de datos
+fuente:
+Paulo Cortez, University of Minho, GuimarÃ£es, Portugal,
+https://archive.ics.uci.edu/ml/datasets/Student+Performance
+http://www3.dsi.uminho.pt/pcortez
+
+- Tenemos dos juegos de datos en los que cada juego se analizan las notas de los alumnos en portugues y  en matemáticas, se incluyen la información sobre dos escuelas en portugal.
+
+Escogemos este set de datos ya que obtiene una muestra representativa al tratar con bastantes registros. Al tener este juego de datos una división entre asignaturas nos resultará más efectivo el uso de modelos no supervisados.
+
+
+```{r}
+mates <- read.csv(file = "student-mat.csv", sep = ";")
+
+portugues <- read.csv("student-por.csv", sep = ";")
+
+head(portugues)
+```
+
+# Exploración de datos
+
+se tratan 33 columnas
+1 school - Escuela (binary: "GP" - Gabriel Pereira or "MS" - Mousinho da Silveira)
+
+2 sex - genero (binary: "F" - female or "M" - male)
+
+3 age - edad (numeric: from 15 to 22)
+
+4 address - residencia del estudiante (binary: "U" - urbana o "R" - rural)
+
+5 famsize - tamaño familiar (binary: "LE3" - 3 o menos personas "GT3" - más de 3 personas)
+
+6 Pstatus - tipo de unidad familiar (binary: "T" - padres juntos o "A" - separados)
+
+7 Medu - Estudios de la madre (numeric: 0 - none,  1 - primary education (4th grade), 2 – 5th to 9th grade, 3 – secondary education or 4 – higher education)
+
+8 Fedu - Estudios del padre (numeric: 0 - none,  1 - primary education (4th grade), 2 – 5th to 9th grade, 3 – secondary education or 4 – higher education)
+
+9 Mjob - Trabajo de la madre (nominal: "teacher", "health" care related, civil "services" (e.g. administrative or police), "at_home" or "other")
+
+10 Fjob - Trabajo del padre (nominal: "teacher", "health" care related, civil "services" (e.g. administrative or police), "at_home" or "other")
+
+11 reason - razon para escoger la escuela (nominal: close to "home", school "reputation", "course" preference or "other")
+
+12 guardian - Supervisor del alumno (nominal: "mother", "father" or "other")
+
+13 traveltime - tiempo de desplazamiento (numeric: 1 - <15 min., 2 - 15 to 30 min., 3 - 30 min. to 1 hour, or 4 - >1 hour)
+
+14 studytime - Horas de estudio semanales (numeric: 1 - <2 hours, 2 - 2 to 5 hours, 3 - 5 to 10 hours, or 4 - >10 hours)
+
+15 failures - numero de clases suspendidas (numeric: n if 1<=n<3, else 4)
+
+16 schoolsup - extra educational support (binary: yes or no)
+
+17 famsup - Soporte familiar para la educación (binary: yes or no)
+
+18 paid - clases de repaso (Math or Portuguese) (binary: yes or no)
+
+19 activities - actividades extraescolares (binary: yes or no)
+
+20 nursery - Atendido en la inferemeria (binary: yes or no)
+
+21 higher - Quiere ir a la universidad (binary: yes or no)
+
+22 internet - Internet en casa (binary: yes or no)
+
+23 romantic - Con pareja (binary: yes or no)
+
+24 famrel - Calidad de la relacion paternofilial (numeric: from 1 - very bad to 5 - excellent)
+
+25 freetime - Tiempo libre en la escuela (numeric: from 1 - very low to 5 - very high)
+
+26 goout - Sale con amigos (numeric: from 1 - very low to 5 - very high)
+
+27 Dalc - Consumo de alcohol semanal (numeric: from 1 - very low to 5 - very high)ç
+
+28 Walc - Consumo de alcohol fin de semana (numeric: from 1 - very low to 5 - very high)
+
+29 health - Estado de salud (numeric: from 1 - very bad to 5 - very good)
+30 absences - Absencias en clase (numeric: from 0 to 93)
+
+NOTAS 
+
+31 G1 - Primer semestre (numeric: from 0 to 20)
+
+31 G2 - Segundo semestre (numeric: from 0 to 20)
+
+32 G3 - Nota final (numeric: from 0 to 20, output target)
+
+
+# Acondicionamiento
+
+Debemos comprobar que todos los datos estén sin errores ni valores nulos
+
+comprobamos si hay valores nulos
+```{r}
+colSums(is.na(portugues))
+colSums(is.na(mates))
+```
+
+Comprobamos que no haya datos que no correspondan
+
+```{r}
+summary(mates)
+summary(portugues)
+```
+
+Gracias a la información adjunta en el repositorio de los datos, sabemos que exiten alumnos duplicados, esto es debido a que todos los alumnos que hacen matemáticas también estudian portugues, pero no todos los alumnos hacen matemáticas. Debemos tener en cuenta esto para realizar los modelos supervisados y no crear overfitting con estudiantes duplicados en el set de datos de testeo.
+
+Los datos parecen correctos, así que vamos a proceder fatorizando las variables.
+
+# Discretización
+
+Pasamos las variables que no son numericas a un factor numérico, este proceso nos perimte computar el análisis de componentes princiaples entre otras. 
+
+```{r}
+names(portugues)
+copia_portugues <- portugues
+
+variables <- names(portugues)
+```
+
+De las variables, nos interesa pasar a numerico las que estan en fromato character.
+Es decir, (por orden): 1,2,4,5,6,9,10,11,12,16,17,18,19,20,21,22,23.
+ "school"     "sex"        "address"    "famsize"    "Pstatus"    "Mjob"  "Fjob"       "reason"     "guardian"   "schoolsup"  "famsup"     "paid" "activities" "nursery"    "higher"     "internet"   "romantic"
+
+
+```{r}
+variables = variables[c(1,2,4,5,6,9,10,11,12,16,17,18,19,20,21,22,23)]
+```
+
+
+```{r}
+# pasamos a factor las variables de los alumnos de portugues
+for (i in variables){
+  portugues[,i] = as.numeric(as.factor(portugues[,i]))
+}
+
+# pasamos a factor las variables de los alumnos de mates
+for (i in variables){
+  mates[,i] = as.numeric(as.factor(mates[,i]))
+}
+
+summary(mates)
+```
+
+
+
+# Análisis de los componentes principales
+
+Para empezar con el análisis de los componentes principales, y debido a que tenemos diversas medidas con un rango de valores dispersos, vamos a proceder con el escalado de los datos de la matriz, realizaremos este proceso por las dos matrices portugues y mates. 
+
+```{r}
+portugues_scale <- scale(portugues)
+```
+
+
+Vamos a estudiar la matriz de covarianza de los datos
+
+1. Creamos la matriz de covarianza
+2. Eliminamos la diagonal dado que nuestros datos están normalizados, todos los términos de la
+diagonal principal son 1
+3. Localizamos las covarianzas mas grandes en valor absoluto.
+
+Obviamos g1, g2, g3, que son las notas, ya que al formarse g3 mediante g1 y g2 la covarianza se dispara.
+
+```{r}
+cov_port <- cov(portugues_scale) # creamos la matriz de covarianza
+
+# Restamos la diagonal simetrica 
+CWsABS <-abs( cov_port - diag(33) )# ya que hay 33 variables
+
+# ordenamos los valores de forma decreciente
+x <- order(CWsABS, decreasing = TRUE)
+
+# como los valores estan duplicados(matriz simetrica) escogemos 
+# cada dos, a partir de la 7 porque de la 1 a la 6 son las covarianzas
+# de g1, g2, g3
+posiciones <- x[c(7,9,11,13,15,17,19,21,23,25)]
+
+for (i in posiciones){
+  print(which(CWsABS == CWsABS[i], arr.ind = T))
+
+   }
+```
+
+Despues de las notas, podemos ver las correlaciones que existen entre variables,
+más allá de las mismas notas, lo segundo que mas afecta a la nota final son failures(clases suspendidas previamente) y higher(si los alumnos quieren ir a la universidad)
+
+Realizamos mediante prcomp el análisis de los componentes principales, y estudiaremos la variabilidad acumulada
+
+```{r}
+portugues.pca <- prcomp(cov_port, scale. = FALSE, center = FALSE)
+summary(portugues.pca)
+portugues.pca$rotation[,1]
+plot(portugues.pca, type = "l")
+
+
+```
+
+Así pues, obtenemos que con las 3 componentes principales explicamos el 55.18% de la variabilidad de los datos. En las componentes principales, de forma analoga con la matriz de covarianza, obtenemos que las variables con mas importancia son las notas g1, g2, g3, seguido de failures, la educación de la madre, si quieren ir a la universidad, la educación del padre y la escuela(lo que podría indicar que los datos estan sesgados de alguna manera, o que los profesores son mas buenos en una que otra)
+
+Obviamos g1, g2, g3, que son las notas, ya que al formarse g3 mediante g1 y g2 la covarianza se dispara.
+```{r}
+mates_scale <- scale(mates)
+cov_mates <- cov(mates_scale) # creamos la matriz de covarianza
+
+# Restamos la diagonal simetrica 
+cov_ABS <-abs( cov_mates - diag(33) )# ya que hay 33 variables
+
+# ordenamos los valores de forma decreciente
+x <- order(cov_ABS, decreasing = TRUE)
+
+# como los valores estan duplicados(matriz simetrica) escogemos 
+# cada dos, a partir de la 7 porque de la 1 a la 6 son las covarianzas
+# de g1, g2, g3
+posiciones <- x[c(7,9,11,13,15,17,19,21,23,25,27,29,31)]
+
+for (i in posiciones){
+  print(which(cov_ABS == cov_ABS[i], arr.ind = T))
+
+   }
+```
+
+Despues de las notas, podemos ver las correlaciones que existen entre variables,
+más allá de las mismas notas, lo que mas afecta a la nota final de mates son failures(clases suspendidas previamente) de nuevo.
+
+Realizamos mediante prcomp el análisis de los componentes principales, y estudiaremos la variabilidad acumulada
+
+```{r}
+mates.pca <- prcomp(cov_mates, scale. = FALSE, center = FALSE)
+summary(mates.pca)
+mates.pca$rotation[,1]
+mates.pca$rotation[,2]
+
+plot(mates.pca, type = "l")
+
+```
+
+
+El gráfico de las componentes principales:
+  **vamos a analizar once gráficas**
+  Cada una representa una componente principal.
+  Hemos seleccionado 11 ya que 
+
+```{r}
+#for (i in c(1:32)){ s = i+1 biplot(portugues.pca, choices = i:s, scale = 0 )}portugues.pca$rotation[,32]
+
+```
+
+
+Así pues, obtenemos que con las 3 componentes principales explicamos el 51.66% de la variabilidad de los datos. En la primera componente principal, de forma analoga con la matriz de covarianza, obtenemos que las variables con más importancia son las notas g1, g2, g3, seguido de failures (0.30), la educación de la madre(0.27), la educación del padre (0.23) y si quieren ir a la universidad(0.20).
+```{r}
+biplot(portugues.pca, choices = 1:2, scale = 0, )
+```
+Como vemos en el gráfico anterior, todas las variables estan muy dispersas y no existe una componente principal que explique la mayoría.
+
+Podemos concluir explicando que el análisis de las componentes principales es un método para reducir la dimensionalidad, por ejemplo, si encontramos oportuno, podríamos coger las 11 primeras componentes principales para mates y explicar el 80.7% de variabilidad del dataframe original, aunque en nuestro caso, recordamos que el objetivo es predecir g3, así que creemos que como más atributos/variables un modelo de mejor calidad predictiva será generado.
+
+
+# PRACTICA 2
+
+
+## Modelo no supervisado
+
+
+Clustering de los datos, con el método de los centroides k-means.
+
+0- Cargamos las librerias
+```{r message= FALSE, warning=FALSE}
+library(cluster)
+```
+
+0.1- Para este análisis, y conociendo que existen dos datasets de estudio, aprovecharemos para compararlos entre ellos, creando los modelos para los datos de las dos asignaturas. (Usaremos los datos escalados)
+
+
+1- PORTUGUESE
+```{r}
+nrow(portugues_scale)
+nrow(portugues)
+```
+
+### Creación de un modelo no supervisado.
+
+1.1- A continuación vamos a aplicar el algoritmo kmeans.
+ 
+Como inicialmente no conocemos el número óptimo de clústers, probamos con varios valores
+```{r message= FALSE, warning=FALSE}
+# Calculamos las distancias con daisy.
+
+d <- daisy(portugues_scale) 
+resultados <- rep(0, 10)
+for (i in c(2,3,4,5,6,7,8,9,10))
+{
+  fit           <- kmeans(portugues_scale, i)
+  y_cluster     <- fit$cluster
+  sk            <- silhouette(y_cluster, d)
+  resultados[i] <- mean(sk[,3])
+}
+```
+
+
+Mostramos en un gráfico los valores de las siluetas medias de cada prueba para comprobar que número de clústers es el mejor.
+
+```{r message= FALSE, warning=FALSE}
+plot(2:10,resultados[2:10],type="o",col="blue",pch=0,xlab="Número de clusters",ylab="Silueta")
+```
+
+Tras probar diferentes veces, el numero idóneo se encuentra entre 2, 3 y 4 clusters.
+
+
+Utilizamos el método Elbow:
+
+```{r}
+resultados <- rep(0, 10)
+for (i in c(2,3,4,5,6,7,8,9,10))
+{
+  fit           <- kmeans(portugues_scale, i)
+  resultados[i] <- fit$tot.withinss
+}
+plot(2:10,resultados[2:10],type="o",col="blue",pch=0,xlab="Número de clusters",ylab="tot.tot.withinss")
+```
+
+Parece ser que los datos no responden correctamente a este método de clustering. Continuamos probando los diferentes clusters, luego, probaremos de nuevo reformulando el modelo siguiendo el análisis previo de las PCA.
+
+- Generamos el modelo con 2 clusters
+```{r}
+  fit           <- kmeans(portugues_scale, 2)
+  y_cluster     <- fit$cluster
+
+```
+
+Para visualizar los clústers podemos usar la función clusplot.
+
+Vemos la agrupación con 2 clústers
+
+```{r}
+clusplot(portugues_scale, y_cluster)
+```
+
+Las agrupaciones son poco claras y se enmarcan una dentro de la otra.
+
+- Generamos el modelo con 7 clusters
+```{r}
+  fit           <- kmeans(portugues_scale,7)
+  y_cluster     <- fit$cluster
+
+```
+
+Para visualizar los clústers podemos usar la función clusplot.
+
+Vemos la agrupación con 7 clústers
+
+```{r}
+clusplot(portugues_scale, y_cluster)
+```
+
+**Para intentar generar un mejor modelo, procedemos a crear un dataset con las variables más importantes del PCA:**
+
+```{r}
+sort(abs(portugues.pca$rotation[,1]),decreasing = TRUE)*1
+```
+
+Las notas finales G3, la escuela, failure, la educación de la madre, la educación del padre, si quieren ir a la universidad, las absencias.
+
+```{r}
+portugues_2 <- portugues[c(1,7,8,15,21,33)]
+portugues_2_scale <- scale(portugues_2)
+head(portugues_2)
+
+```
+
+Volvemos a crear los clusters con el nuevo DF
+
+```{r message= FALSE, warning=FALSE}
+# Calculamos las distancias con daisy.
+d <- daisy(portugues_2_scale) 
+for (i in c(2,3,4,5,6,7,8,9,10))
+{
+  fit           <- kmeans(portugues_2_scale, i)
+  y_cluster     <- fit$cluster
+  sk            <- silhouette(y_cluster, d)
+  resultados[i] <- mean(sk[,3])
+}
+```
+
+Representamos en un gráfica los valores de las siluetas media de cada prueba para comprobar que número de clústers es el mejor
+```{r}
+plot(2:10,resultados[2:10],type="o",col="blue",pch=0,xlab="Número de clusters",ylab="Silueta")
+```
+
+3,4 y 8 parecen los numeros de clusters más relevantes.
+
+El método elbow (codo) creará una curva y se seleccionará el valor que se encuentra en el “codo” de esta:
+```{r}
+resultados <- rep(0, 10)
+for (i in c(2,3,4,5,6,7,8,9,10))
+{
+  fit           <- kmeans(portugues_2_scale, i)
+  resultados[i] <- fit$tot.withinss
+}
+plot(2:10,resultados[2:10],type="o",col="blue",pch=0,xlab="Número de clusters",ylab="tot.tot.withinss")
+```
+
+Parece confirmar que el mejor numero de clusters para estos datos es de 5 o 7.
+
+### pasamos a la insepección visual:
+
+- Generamos el modelo con 3 clusters
+```{r}
+  fit           <- kmeans(portugues_2_scale, 3)
+  y_cluster     <- fit$cluster
+
+```
+
+Para visualizar los clústers podemos usar la función clusplot.
+
+Vemos la agrupación con 2 clústers
+
+```{r}
+clusplot(portugues_2_scale, y_cluster)
+```
+- Generamos el modelo con 5 clusters
+```{r}
+  fit           <- kmeans(portugues_2_scale, 5)
+  y_cluster     <- fit$cluster
+```
+
+Para visualizar los clústers podemos usar la función clusplot.
+
+Vemos la agrupación con 5 clústers
+
+```{r}
+clusplot(portugues_2_scale, y_cluster,color=TRUE, shade=FALSE, labels = 5)
+```
+
+- Generamos el modelo con 7 clusters
+```{r}
+  fit           <- kmeans(portugues_2_scale, 7)
+  y_cluster     <- fit$cluster
+```
+
+Para visualizar los clústers podemos usar la función clusplot.
+
+Vemos la agrupación con 7 clústers
+
+```{r}
+clusplot(portugues_2_scale, y_cluster,color=TRUE, shade=FALSE, labels = 7)
+```
+
+### Conclusiones
+Creemos que 7 és un numero demasiado grande ya que se solapan los puntos entre ellos, 3 podría ser el más óptimo pero sinembargo, nos sorprende positivamente la agregación en 5 clusters ya que tanto en la inspección vicual como en el método de Elbow han sido mejores.
+
+Además, si comparamos la elección de las variables, creemos que el modelo conn la elección de variables es mejor:
+```{r}
+  fit           <- kmeans(portugues_scale, 5)
+  y_cluster    <- fit$cluster
+  clusplot(main = "SIN PCA" ,portugues_scale, y_cluster,color=TRUE, shade=FALSE, labels = 5)
+  
+  fit           <- kmeans(portugues_2_scale, 5)
+  y_cluster     <- fit$cluster
+  clusplot(main = "CON PCA" ,portugues_2_scale, y_cluster,color=TRUE, shade=FALSE, labels = 5)
+
+
+```
+
+
+## Modelos de agregación con distancias distintas
+
+### METODO K-MEDOIDS
+Este utiliza medianas en vez de medias para limitar la influencia de los outliers.
+
+Creamos la agregacion con 4 clusters
+```{r}
+
+library('factoextra')
+
+fviz_nbclust(x = portugues_2_scale, FUNcluster = pam, method = "wss", k.max = 15,diss = dist(portugues_2_scale, method ="euclidean" ))
+
+pam.cluster <- pam(portugues_2_scale, 4)
+
+fviz_cluster(pam.cluster, data = portugues_2_scale)
+
+```
+
+Con este nuevo método de agregación, encontramos de nuevo 4 grupos idóneos, que es el número donde la curva empieza a estabilizarse.
+
+Lo comparamos ahora con los datos sin seleccionar
+```{r}
+fviz_nbclust(x = portugues_scale, FUNcluster = pam, method = "wss", k.max = 15,
+             diss = dist(portugues_scale, method = "euclidean"))
+```
+Confirmamos pues, que con los datos sin reducir, es difícil de nuevo encontrar el número idóneo de clusters, para indicar que el 8 es el grupo predominante, como en el primer modelo de agregación.
+
+### Medidas de calidad del modelo K-medois
+
+Podemos testear la calidad del modelo de agregación con el datset de mates, que nos da un numero parecido de clustrers óptimos, 4.
+```{r}
+mates_2 <- mates[c(1,7,8,21,30,33)]
+mates_2_sale <- scale(mates_2)
+
+fviz_nbclust(x = mates_2_sale, FUNcluster = pam, method = "wss", k.max = 15,
+             diss = dist(mates_2_sale, method = "euclidean"))
+```
+
+Podemos comparar también la calidad con el mimo datset pero con una distancia diferente:
+
+```{r}
+fviz_nbclust(x = portugues_2_scale, FUNcluster = pam, method = "silhouette", k.max = 15,
+             diss = dist(portugues_2_scale, method ="euclidean" ))
+```
+
+Con Silhouette nos confirma los 4 clusters también.
+
+### Comparamos los modelos de k-means y k-medoids 
+
+Ambos se compararan con  el portugues_2_scale, en el que las variables son más adecuadas.
+- K- means
+
+Generamos el modelo con 4 clusters
+```{r}
+  fit           <- kmeans(portugues_2_scale, 4,nstart = 25, )
+  y_cluster     <- fit$cluster
+```
+
+
+Vemos la agrupación con 4 clústers de k-means y seguidamente la agrupación de K-medoids tambiñen con 4 clusters
+
+```{r}
+clusplot(portugues_2_scale, y_cluster,color=TRUE, shade=FALSE, labels = 4)
+
+fviz_cluster(pam.cluster, data = portugues_2_scale)
+
+```
+
+Parece que los gráficos son muy similares, pero estan invertidos. Si imaginamos dibujar un eje en el medio, en la parte superior del primer modelo se encuentrean 3 grupos, mientras que en el segundo gráfico estos se encuntran abajo, y al revés con el otros grupo.
+
+
+### Conclusiones
+
+## Caso de asociación
+
+El objetivo de las reglas de asociación es descubrir información acerca de ellas mismas, es decir, encontrar patrones que se repiten en los dominios de un conjunto de atributos y así poder describir los datos de una manera generalizada, las reglas de asociación trabajan con valores binarios. Nuestro set de datos contiene muchas columnas y creemos que este está enfocado en generar modelos predictivos de las notas/G3, por ende, la realización de reglas de asociación quedaría en segundo plano ya que entendemos que un modelo predictivo será más eficiente.
+
+Para crear reglas de asociación, que podemos usarlas para encontrar los grupos que siguen patrones respecto a las notas, debemos reformular el datset utilizando las variables más significativas. Estas las extraemos del análisis de las componentes principales que hemos visto previamente. Queremos buscar asociaciones con las notas de los alumnos. Es decir, mediante las variables Higher --> failures --> Medu ----> G3, buscaremos los patrones más frecuentes.
+ 
+
+## modelo de asociación
+el siguiente codigo, está inspirado en: https://www.cienciadedatos.net/documentos/43_reglas_de_asociacion
+
+- 0 Paquetes
+```{r}
+
+```
+
+- 1.Datos
+
+Para proceder con el análisis de las reglas de asociación debemos tenr datos categricos y no numéricos para entender mejor los modelos. 
+
+Así pues demos primero categorizar la variable G3, Las notas en portugal van del 0 al 20, 0=> 10  es suspendido,  <=10  >14 es aprobado, <=14 >17 es notable, <=17 >19, sobresaliente,<=19 <=20 matricula.
+
+Agrupamos notas
+```{r}
+
+portugues_notas <- cut(portugues$G3, breaks = c(-1,10,14,17,19, 21))
+levels(portugues_notas) <- c("suspenso", "aprobado", "notable", "sobresaliente", "matricula")
+
+# cambiamos la variable numerica a codificada en grupos
+portugues_2$G3 <- portugues_notas
+portugues_2$G3 <- portugues_2$G3
+
+
+# Seleccionamos las variables para las reglas de asociación:
+# Higher --> failures --> Medu ----> G3,
+portugues_reglas <- portugues_2[,c(5,2,6)]
+
+
+# pasamos los numeros a su refernicante
+portugues_reglas$higher <- sub(2,"yes",portugues_reglas$higher)
+portugues_reglas$higher <- sub(1,"no",portugues_reglas$higher)
+
+
+
+portugues_reglas$Medu <- sub(0,"none",portugues_reglas$Medu)
+
+# reducimos los grupos contaremos no tener primaria como none
+portugues_reglas$Medu <- sub(1,"none",portugues_reglas$Medu)
+portugues_reglas$Medu <- sub(2,"primary education",portugues_reglas$Medu)
+portugues_reglas$Medu <- sub(3,"secondary education",portugues_reglas$Medu)
+portugues_reglas$Medu <- sub(4,"higher education",portugues_reglas$Medu)
+
+
+
+summary(portugues_reglas)
+```
+### Adecuació para las reglas
+El siguiente código esta sacado de:
+https://datascienceplus.com/implementing-apriori-algorithm-in-r/
+
+Si
+- Seleccionamos las variables para las reglas de asociación:
+Higher --> failures --> Medu ----> G3,\*
+
+Rectificación\* No usaremos failures ya que creemos que esta demasiado correlacionada con G3
+```{r}
+head(portugues_reglas)
+```
+- Ordenamos el DF
+```{r}
+portugues_reglas_ordenado <- portugues_reglas[order(portugues_reglas$higher),]
+
+head(portugues_reglas_ordenado)
+```
+
+- Otorgamos forma para los datos repetidos
+```{r}
+
+portugues_reglas_ordenado_i <- ddply(portugues_reglas,c("Medu","higher") # seleccionamos las columnas a codificar, no se incluye G3
+                                     ,function(portugues_reglas_ordenado)paste(portugues_reglas_ordenado$G3,           collapse = ","))
+
+
+
+head(portugues_reglas_ordenado_i,100)
+
+write.csv(portugues_reglas_ordenado_i,"ItemList.csv", quote = FALSE, row.names = TRUE)
+
+```
+- Reglas de asociación
+```{r}
+txn = read.transactions(file="ItemList.csv", rm.duplicates= TRUE, format="basket",sep=",",cols=1,header = TRUE)
+```
+
+eliminamos las "quotes"
+```{r}
+txn@itemInfo$labels <- gsub("\"","",txn@itemInfo$labels)
+
+```
+
+
+aplicamos las reglas
+```{r}
+notas_rules <- apriori(txn,parameter = list(sup = 0.01, conf = 0.5,target="rules"));
+```
+
+
+```{r}
+
+if(sessionInfo()['basePkgs']=="tm" | sessionInfo()['otherPkgs']=="tm"){
+    detach(package:tm, unload=TRUE)
+}
+df_notas <- as(notas_rules,"data.frame")
+
+
+```
+
+Plot reglas
+
+```{r}
+plot(notas_rules,measure=c("support","lift"),shading="confidence")
+itemFrequencyPlot(txn, topN = 10)
+
+inspect(head(notas_rules,50))
+
+```
+
+
+Enocntramos que existe un grupo de reglas con el lift de 2, lo que indica que las reglas ya tienen algo de entidad.
+
+Veamos la reglas con mayor lift:
+```{r}
+
+inspect(head(sort(notas_rules, by = "lift"), 20))
+
+```
+
+Destacamosque independientemente de los errores, en los que aparecen notas donde no debería, que:
+Su madre tiene estudios universitarios y sus hijos quieren ir a la universidad, Sacan notables y excelentes.
+{higher education,yes	=>	{notable}	0.125	1	0.125	
+{higher education,yes}	=>	{sobresaliente}
+
+## Modelo de arbol de decisión:
+
+Trabajaremos con la matriz numérica, a diferencia del punto anterior.
+
+Escogeremos datos aleatorios de 'portugues', crearemos el dataset de entrenamiento, lo probaremos sobre los datos no entrenados, lo corroboraremos, esperando resultados mejores en mates.
+
+Por lo tanto, la variable por la que clasificaremos es el campo
+default, de si el estudiante aprueba o no la asignatura G3.
+
+### Creamos los datos de testeo
+
+```{r}
+set.seed(1)
+testeo_portugues <- portugues_2[sample(nrow(portugues_2)),]
+
+# G3 está en la última columna
+# varaiable dependiente Y
+y <- testeo_portugues[,6]
+x <- testeo_portugues[,-6]
+
+nrow(testeo_portugues)
+```
+
+
+-2. Testeos entrenamiento
+
+Creamos las muestras de entrenamiento y prueba, una proporción de 2/3 y 1/3 respectivamente
+
+
+```{r}
+split_prop <- 3
+
+indexes = sample(1:nrow(testeo_portugues), size=floor(((split_prop-1)/split_prop)*nrow(testeo_portugues)))
+
+
+
+trainx<-x[indexes,]
+trainy<-y[indexes]
+testx<-x[-indexes,]
+testy<-y[-indexes]
+```
+
+- 2.1 comprobamos proporción
+```{r}
+prop.table(table(trainy))
+prop.table(table(testy))
+
+```
+
+Vemos que las proporciones son correctas en ambos datos. Estamos listos para crear el modelo de asociación
+
+
+Reglas del arbol sin opciones de poda:
+```{r}
+trainy = as.factor(trainy)
+modelo_sin_poda <- C50::C5.0(trainx, trainy, rules=TRUE, control = C50::C5.0Control(noGlobalPruning = TRUE))
+summary(modelo_sin_poda)
+```
+
+El modelo ha generado un 37.0% de errores en la predicción de G3. No es un resultado notable pero es bastante decente. Destacamos las  dos primeras reglas.
+
+Rule 1: (64/9, lift 2.8)
+	Medu <= 3
+	failures > 0
+	->  class suspenso  [0.848]
+
+Rule 2: (43/11, lift 2.4)
+	higher <= 1
+	->  class suspenso  [0.733]
+
+
+
+- Reglas del arbol con opciones de poda:
+```{r}
+trainy = as.factor(trainy)
+model_con_poda <- C50::C5.0(trainx, trainy, rules=TRUE, control = C50::C5.0Control(noGlobalPruning = FALSE))
+summary(model_con_poda)
+```
+
+
+El modelo clasifica erronamente en un 38.4% de los casos. Destacamos la primera y la segunda regla, que como vemos repite el segundo caso con la misma puntuación:
+Rule 1: (71/14, lift 2.6)
+	failures > 0
+	->  class suspenso  [0.795]
+
+Rule 2: (43/11, lift 2.4)
+	higher <= 1
+	->  class suspenso  [0.733]
+
+Remarcamos los estudiantes que ya han suspendido antes (failures > 0), luego tienen más probabilidades de suspender G3.
+
+
+Mostramos el arbol de decisión, solo del modelo con poda debido a que sin poda el arbol no consigue ser lo suficiente claro.
+
+```{r}
+# modelo_con_poda <- C50::C5.0(trainx, trainy, rules=FALSE, control = C50::C5.0Control(noGlobalPruning = FALSE))
+# plot(modelo_sin_poda)
+```
+
+
+
+
+
+### Matriz de confusión
+
+```{r}
+predicted_model_con_poda <- predict( model_con_poda, testx, type="class" )
+
+
+mat_conf<-table(testy,Predicted=predicted_model_con_poda)
+mat_conf
+
+```
+
+
+
+
+- Evaluación
+
+Hemos podido ver que la eficiencia con poda es unpoco pero que sin poda.Sin embargo, la comprensibilidad es mejor con poda.
+
+Las reglas que hemos obtenido son:
+Rule 1: (71/14, lift 2.6)
+	failures > 0
+	->  class suspenso  [0.795]
+
+Rule 2: (43/11, lift 2.4)
+	higher <= 1
+	->  class suspenso  [0.733]
+
+Rule 1: (64/9, lift 2.8)
+	Medu <= 3
+	failures > 0
+	->  class suspenso  [0.848]
+
+##Boosting
+
+para las técnicas de boosting, obtenemos información de los siguientes links.
+
+https://www.cienciadedatos.net/documentos/33_arboles_decision_random_forest_gradient_boosting_c50#C50
+y
+
+https://rubenfcasal.github.io/aprendizaje_estadistico/boosting-en-r.html
+
+
+
+La capacidad predictiva de los modelos basados en un único árbol es bastante inferior a la conseguida con otros modelos. Esto es debido a su tendencia al overfitting y alta varianza.
+
+Creamos el primer modelo con poda y con boosting, earlyStopping = FALSE 
+
+```{r}
+trainy = as.factor(trainy)
+model_con_poda_boost <- C50::C5.0(trainx, trainy, rules=TRUE, control = C50::C5.0Control(noGlobalPruning = FALSE, earlyStopping = FALSE ))
+summary(model_con_poda_boost)
+```
+
+
+No se aprecian diferencias así que probaremos otra técnica de boosting
+
+```{r}
+tree_boost <- C50::C5.0(x = trainx, y = trainy, trials = 3, rules = TRUE)
+summary(tree_boost)
+
+```
+
+Podemos ver como trabaja el boosting con los diferentes intentos, sinembargo en los cuatro intentos no consigue bajar del 38.4%
+
+```{r}
+predict(tree_boost, newdata = testx[1:3,], type = "prob")
+```
+
+# Conclusiones y posibles limitaciones
+Preparando el modelo nos hemos tenido que plantear que datasrt utilizábamos. Debido a que venían dos datasets la duda era que hacer con ellos dos,  nos han surgido muchas preguntas sobre ello, cómo: ¿Si mezclamos ambos datasets estará el colegio X sobre representado? O ¿estarán sobre representados los alumnos y sus atributos?   ¿Y si los juntamos y eliminamos ciertos registros? 
+
+Estas dudas, mediante la prueba y el error nos han dado ciertos resultados, hemos decidido trabajar finalmente solo sobre el datset de portuguese ya que este tenia solo alumnos no repetidos, conservaba los atributos al completo y no se corría el riesgo de overfitting.
+
+Las limitaciones para el modelo no supervisado han sido primordialmente pocas. Los datos contenían demasiadas variables, pero el previo estudio de las componentes principales nos ha ayudado para determinar las que más variabilidad explicaban. Sin embargo, justo al final de este trabajo nos hemos dado cuenta de que el uso de “failure”, que es una variable altamente correlacionada con G3 podía estar sesgando los datos ya que al basarse en el historial podría darse el caso de menospreciar las variables que de verdad determinan la agregación y la clasificación a posteriori en el modelo supervisado.
+
+
+Además, las limitaciones para el método supervisado han sido en cuanto a la inserción de las variables como tabla binaria, que finalmente no ha sido del todo adecuado, y pese a que se han obtenido reglas decentes, deberíamos haber impedido que las reglas de asociación combinaran dos veces o más notas, es decir notable   excelente, ya que esto demuestra que aun y estando generando todas las reglas de igual manera, el cómputo  de las mismas ha sido mucho más ineficiente
